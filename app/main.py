@@ -22,6 +22,7 @@ from app.realtime.hub import RealtimeHub
 from app.realtime.router import router as ws_router
 from app.tickets.router import router as tickets_router
 from app.users.router import router as users_router
+from app.web.router import router as web_router
 
 logger = logging.getLogger(__name__)
 
@@ -159,10 +160,7 @@ def create_app() -> FastAPI:
     static_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-    @app.get("/")
-    async def serve_index():
-        return FileResponse("static/index.html")
-
+    app.include_router(web_router)
     app.include_router(core_router)
     app.include_router(auth_router)
     app.include_router(ws_router)
