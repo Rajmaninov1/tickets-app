@@ -20,6 +20,7 @@ class TicketCreate(BaseModel):
     status: TicketStatus
     priority: TicketPriority
 
+
 class TicketUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=3, max_length=200)
     description: str | None = Field(default=None, min_length=1, max_length=5000)

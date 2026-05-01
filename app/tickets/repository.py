@@ -6,7 +6,6 @@ from sqlalchemy.orm import selectinload
 
 from app.tickets.models import Comment, Ticket, TicketAttachment, TicketPriority, TicketStatus
 
-
 # --- TICKETS ---
 
 

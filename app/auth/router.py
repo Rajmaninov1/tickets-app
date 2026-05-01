@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,7 +13,26 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.users.repository import upsert_user
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_LOGIN_BROWSER_DOC = (
+    "Redirects the **browser** to the Google OAuth screen. "
+    "Swagger **Try it out** uses `fetch()`, which cannot complete cross-origin OAuth redirects, "
+    "so you often see **Failed to fetch** / CORS-style errors here—that is expected. "
+    "Open `/auth/login` in the address bar or follow a normal link instead."
+)
+
+_CALLBACK_BROWSER_DOC = (
+    "OAuth redirect URI invoked by **Google** after sign-in. "
+    "Must run as a full top-level navigation from Google, not via Swagger **Try it out**."
+)
+
+_DEV_LOGIN_BROWSER_DOC = (
+    "Creates a dev user and sets the session cookie via **302 redirect**. "
+    "Swagger execute may not behave like a real browser tab; prefer opening the URL directly."
+)
 limiter = Limiter(key_func=get_remote_address)
 
 
@@ -28,24 +48,37 @@ def get_google_sso() -> GoogleSSO | None:
     )
 
 
-@router.get("/login")
+@router.get(
+    "/login",
+    summary="Start Google login",
+    description=_LOGIN_BROWSER_DOC,
+    response_description="Redirect to Google (or dev-login when SSO is unset in dev)",
+)
 @limiter.limit("10/minute")
 async def login(request: Request) -> RedirectResponse:
+    logger.debug("/auth/login: starting redirect flow")
     sso = get_google_sso()
     if not sso:
         settings = get_settings()
         if settings.environment == "dev":
+            logger.debug("/auth/login: SSO not configured, redirecting to dev-login")
             return RedirectResponse(url="/auth/dev-login")
         raise HTTPException(
             status_code=501,
             detail="Google SSO not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
         )
     async with sso:
+        logger.debug("/auth/login: redirecting to Google SSO")
         return await sso.get_login_redirect()
 
 
-@router.get("/dev-login")
+@router.get(
+    "/dev-login",
+    summary="Dev login (no Google)",
+    description=_DEV_LOGIN_BROWSER_DOC,
+)
 async def dev_login(request: Request, db: AsyncSession = Depends(get_db)) -> RedirectResponse:
+    logger.debug("/auth/dev-login: requested")
     settings = get_settings()
     if settings.environment != "dev":
         raise HTTPException(status_code=403, detail="Dev login only available in dev environment")
@@ -67,12 +100,18 @@ async def dev_login(request: Request, db: AsyncSession = Depends(get_db)) -> Red
             "avatar_url": user.avatar_url,
         },
     )
+    logger.debug("/auth/dev-login: session set user_id=%s", user.id)
     return RedirectResponse(url="/", status_code=302)
 
 
-@router.get("/callback")
+@router.get(
+    "/callback",
+    summary="Google OAuth callback",
+    description=_CALLBACK_BROWSER_DOC,
+)
 @limiter.limit("10/minute")
 async def callback(request: Request, db: AsyncSession = Depends(get_db)) -> RedirectResponse:
+    logger.debug("/auth/callback: OAuth callback received")
     sso = get_google_sso()
     if not sso:
         raise HTTPException(status_code=501, detail="Google SSO not configured")
@@ -80,6 +119,7 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)) -> Redi
         async with sso:
             user = await sso.verify_and_process(request)
     except Exception as exc:  # noqa: BLE001
+        logger.debug("/auth/callback: SSO verification failed", exc_info=True)
         raise HTTPException(status_code=401, detail="SSO verification failed") from exc
 
     email = getattr(user, "email", None)
@@ -99,10 +139,12 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)) -> Redi
             "avatar_url": db_user.avatar_url,
         },
     )
+    logger.debug("/auth/callback: session set user_id=%s (upserted from SSO)", db_user.id)
     return RedirectResponse(url="/", status_code=302)
 
 
 @router.post("/logout")
 async def logout(request: Request) -> dict[str, Any]:
+    logger.debug("/auth/logout: clearing session")
     clear_session(request)
     return {"ok": True}

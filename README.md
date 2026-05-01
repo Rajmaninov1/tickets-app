@@ -13,15 +13,7 @@ App FastAPI lista para correr en local con:
 
 ### Requisitos
 
-Opción recomendada (más simple):
-
 - Docker Desktop (incluye `docker compose`)
-
-Opción sin Docker (avanzada):
-
-- Python >= 3.11
-- Postgres corriendo localmente
-- `uv` instalado (recomendado) o `pip`
 
 ---
 
@@ -31,25 +23,6 @@ Crea un archivo `.env` en la raíz del repo (puedes copiarlo desde `.env.example
 
 ```bash
 cp .env.example .env
-```
-
-Mínimo recomendado para desarrollo (funciona con `docker compose` por defecto):
-
-```env
-ENVIRONMENT=dev
-BASE_URL=http://localhost:8000
-
-# Sesiones (cookie firmada). Cambiar en prod.
-SECRET_KEY=change-me
-
-# Infra (Docker compose defaults)
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/app
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/
-
-# Google OAuth (opcional: si no lo configuras, /auth/login fallará)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=http://localhost:8000/auth/callback
 ```
 
 Notas:
@@ -92,12 +65,6 @@ El proyecto utiliza **Alembic configurado de manera asíncrona** para funcionar 
 - La configuración está en `alembic/env.py` y toma la URL desde `app.core.config.get_settings()` (variable `DATABASE_URL`).
 - Las versiones de las migraciones se encuentran en `alembic/versions/` y deben estar versionadas en Git.
 
-Aplicar migraciones:
-
-```bash
-docker compose exec app uv run alembic upgrade head
-```
-
 Autogenerar nueva migración (si cambias los modelos):
 
 ```bash
@@ -121,70 +88,6 @@ Si necesitas borrar todos los datos y regenerar las migraciones desde cero:
 Web:
 
 - Abre `http://localhost:8000`
-
-SSO Google:
-
-- `GET /auth/login`
-- `GET /auth/callback`
-- `POST /auth/logout`
-
----
-
-### REST API: Tickets / Comentarios / Adjuntos
-
-Base path: `/api/tickets`
-
-Tickets:
-
-- `GET /api/tickets`
-- `POST /api/tickets` (requiere sesión, **JSON**)
-- `GET /api/tickets/{ticket_id}`
-- `PATCH /api/tickets/{ticket_id}`
-- `DELETE /api/tickets/{ticket_id}`
-
-Comentarios:
-
-- `GET /api/tickets/{ticket_id}/comments`
-- `POST /api/tickets/{ticket_id}/comments` (requiere sesión)
-- `DELETE /api/tickets/comments/{comment_id}`
-
-Adjuntos:
-
-- `GET /api/tickets/{ticket_id}/attachments`
-- `POST /api/tickets/{ticket_id}/attachments` (requiere sesión, **multipart/form-data**, múltiples archivos, max 10MB c/u)
-- `DELETE /api/tickets/attachments/{attachment_id}`
-
-Estados soportados del ticket:
-
-- `Abierto`, `En progreso`, `En revisión`, `Cerrado`
-
----
-
-### Estructura del proyecto
-
-- `app/main.py`: crea la app FastAPI, middleware de sesión, static, routers y lifespan
-- `app/auth/*`: SSO Google + helpers de sesión
-- `app/db/*`: SQLAlchemy async
-- `app/*/models.py`: modelos ORM (`User`, `Ticket`, `Comment`, `Notification`, etc.)
-- `app/tickets/*`: REST API (schemas, repository, routes, storage)
-- `alembic/`: migraciones
-- `static/`: assets estáticos
-
----
-
-### Comandos útiles
-
-Ver logs:
-
-```bash
-docker compose logs -f app
-```
-
-Reiniciar con volúmenes limpios (borra datos de Postgres):
-
-```bash
-docker compose down -v
-```
 
 ---
 
