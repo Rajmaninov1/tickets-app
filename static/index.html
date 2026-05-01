@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tickets Flow - Lightweight Ticketing</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <header v-if="user">
+            <div class="logo">TicketsFlow</div>
+            
+            <div class="user-nav">
+                <div class="notification-badge" @click="toggleNotifications">
+                    <i data-lucide="bell"></i>
+                    <span v-if="unreadCount > 0" class="badge-count">{{ unreadCount }}</span>
+                </div>
+                
+                <div class="user-profile" v-if="user">
+                    <img :src="user.avatar_url" class="avatar" :alt="user.name">
+                </div>
+
+                <button @click="logout" class="btn-icon" title="Logout">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </div>
+        </header>
+
+        <main v-if="user">
+            <div class="actions">
+                <div class="search-box">
+                    <input type="text" v-model="searchQuery" placeholder="Search tickets..." class="glass-input">
+                </div>
+                
+                <div class="dashboard-controls">
+                    <div class="view-toggle">
+                        <button 
+                            class="toggle-btn" 
+                            :class="{ active: viewMode === 'list' }"
+                            @click="viewMode = 'list'"
+                        >
+                            <i data-lucide="list"></i> List
+                        </button>
+                        <button 
+                            class="toggle-btn" 
+                            :class="{ active: viewMode === 'kanban' }"
+                            @click="viewMode = 'kanban'"
+                        >
+                            <i data-lucide="layout-grid"></i> Kanban
+                        </button>
+                    </div>
+                    
+                    <button @click="openCreateModal" class="btn-primary">
+                        <i data-lucide="plus"></i> New Ticket
+                    </button>
+                </div>
+            </div>
+
+            <!-- List View -->
+            <section v-if="viewMode === 'list'" class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Author</th>
+                            <th>Assigned</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="ticket in filteredTickets" :key="ticket.id" @click="selectTicket(ticket)" class="ticket-row">
+                            <td>#{{ ticket.id }}</td>
+                            <td><div class="ticket-title-cell">{{ ticket.title }}</div></td>
+                            <td>{{ ticket.author_id }}</td>
+                            <td>{{ ticket.assigned_to_id }}</td>
+                            <td><span :class="'badge badge-priority-' + ticket.priority.toLowerCase()">{{ ticket.priority }}</span></td>
+                            <td><span class="badge badge-status">{{ ticket.status }}</span></td>
+                            <td class="text-secondary">{{ formatDate(ticket.updated_at) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Kanban View -->
+            <section v-if="viewMode === 'kanban'" class="kanban-container">
+                <div v-for="status in statuses" :key="status" class="kanban-column" 
+                     @dragover.prevent @drop="onDrop($event, status)">
+                    <div class="column-header">
+                        <h3 class="column-title">{{ status }}</h3>
+                        <span class="text-secondary">{{ getTicketsByStatus(status).length }}</span>
+                    </div>
+                    
+                    <div v-for="ticket in getTicketsByStatus(status)" :key="ticket.id" 
+                         class="ticket-card" draggable="true" @dragstart="onDragStart($event, ticket)"
+                         @click="selectTicket(ticket)">
+                        <div class="ticket-title">{{ ticket.title }}</div>
+                        <div class="ticket-meta">
+                            <span :class="'badge badge-priority-' + ticket.priority.toLowerCase()">{{ ticket.priority }}</span>
+                            <span class="text-secondary">#{{ ticket.id }}</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modals and Overlays -->
+        <div v-if="selectedTicket" class="modal-overlay" @click.self="closeTicket">
+            <div class="modal-content glass slide-enter">
+                <button class="close-modal" @click="closeTicket">&times;</button>
+                
+                <div class="modal-header">
+                    <span :class="'badge badge-priority-' + selectedTicket.priority.toLowerCase()">{{ selectedTicket.priority }}</span>
+                    <h2 class="mt-2">{{ selectedTicket.title }}</h2>
+                    <div class="text-secondary text-sm">#{{ selectedTicket.id }} • Created by {{ selectedTicket.author_id }}</div>
+                </div>
+
+                <div class="modal-body">
+                    <div class="ticket-description glass-well">
+                        {{ selectedTicket.description }}
+                    </div>
+
+                    <div class="ticket-meta-grid">
+                        <div class="meta-item">
+                            <label>Status</label>
+                            <select v-model="selectedTicket.status" @change="updateTicketStatus" class="glass-select">
+                                <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
+                            </select>
+                        </div>
+                        <div class="meta-item">
+                            <label>Assigned To</label>
+                            <div class="reassign-container">
+                                <input type="text" v-model="userSearchQuery" @input="searchUsers" placeholder="Search users..." class="glass-input-sm">
+                                <ul v-if="userResults.length" class="user-results glass">
+                                    <li v-for="u in userResults" :key="u.id" @click="reassignTicket(u.id)">
+                                        {{ u.name }} ({{ u.email }})
+                                    </li>
+                                </ul>
+                                <div class="current-assignee mt-1 text-sm text-accent" v-if="selectedTicket.assigned_to_id">
+                                    Current ID: {{ selectedTicket.assigned_to_id }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <section class="comments-section">
+                        <h3>Comments</h3>
+                        <div class="comment-list">
+                            <div v-for="c in comments" :key="c.id" class="comment glass">
+                                <div class="comment-header">
+                                    <strong>User {{ c.author_id }}</strong>
+                                    <span class="text-xs text-secondary">{{ formatDate(c.created_at) }}</span>
+                                </div>
+                                <div class="comment-body">{{ c.body }}</div>
+                            </div>
+                        </div>
+                        <div class="add-comment mt-4">
+                            <textarea v-model="newComment" placeholder="Add a comment..." class="glass-textarea"></textarea>
+                            <button @click="postComment" :disabled="!newComment.trim()" class="btn-primary btn-sm mt-2">Post Comment</button>
+                        </div>
+                    </section>
+
+                    <section class="attachments-section">
+                        <h3>Attachments</h3>
+                        <div class="attachment-list">
+                            <div v-for="a in attachments" :key="a.id" class="attachment-item glass">
+                                <span>{{ a.filename }}</span>
+                                <div class="attachment-actions">
+                                    <a :href="'/api/tickets/attachments/' + a.id + '/download'" target="_blank" class="text-accent">Download</a>
+                                    <button @click="deleteAttachment(a.id)" class="text-danger">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="upload-zone mt-4">
+                            <input type="file" multiple @change="uploadFiles" class="glass-file-input">
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auth Loader -->
+        <div v-if="loading" class="full-loader">
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <!-- Vue 3 ESM -->
+    <script type="module" src="/static/app.js"></script>
+</body>
+</html>

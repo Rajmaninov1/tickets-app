@@ -11,12 +11,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
 
 
-@router.get("/")
-async def root() -> dict[str, str]:
-    """Root endpoint – welcome message."""
-    return {"message": "Welcome to the Tickets API. Visit /docs for API documentation."}
-
-
 @router.get("/health")
 async def health() -> dict[str, str]:
     """Liveness probe – confirms the process is running."""

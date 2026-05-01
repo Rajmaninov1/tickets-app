@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class RealtimeEvent(BaseModel):
-    type: Literal["broadcast"] = "broadcast"
+    type: Literal["broadcast", "notification"] = "broadcast"
     channel: str = "global"
     message: str = ""
     from_user: str | None = None
