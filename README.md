@@ -1,23 +1,49 @@
-## Orbidi FastAPI Tickets App
+# Orbidi FastAPI Tickets App
 
-App FastAPI lista para correr en local con:
+App de tickets para prueba ténica de Orbidi
 
+## Decisiones técnicas
+
+- Uso de **FastAPI** para el backend
 - **SSO Google** (`fastapi-sso`) + **sesión en cookie** (`SessionMiddleware`)
 - **PostgreSQL** con **SQLAlchemy async** + Alembic
 - **Tickets / comentarios / adjuntos** (REST API)
-- **Notificaciones** persistentes (REST API)
+- **Notificaciones** con **RabbitMQ** + **WebSockets**
 - **Static files** en `static/`
 - **Storage local** en `./data/uploads`
+- Frontend con **Vue**
+- Organización de carpetas según entidades del dominio
+- **docker compose** para levantar los servicios en local
+- **Manejo Desacoplado de Adjuntos**: Separación de la creación de tickets de la subida de archivos para un manejo más limpio de payloads Multipart.
+
+## Herramientas de IA usadas
+
+- **Antigravity** para generar y analizar código y corregir errores
+- **Cursor** para generar código y corregir errores (primera vez que lo usaba pero lo intenté por la llamada que tuve con July Vanessa donde mencionó que la usan en su equipo)
 
 ---
 
-### Requisitos
+## Requisitos
 
 - Docker Desktop (incluye `docker compose`)
 
 ---
 
-### Variables de entorno
+## Partes completadas
+
+Todas las partes principales de la aplicación están completas, incluyendo:
+
+- Autenticación SSO Google.
+- CRUD completo de Tickets con comentarios y adjuntos.
+- Tablero Kanban interactivo con Drag & Drop.
+- Vista de lista con ordenamiento dinámico por múltiples columnas.
+- Sistema de notificaciones en tiempo real (RabbitMQ + WebSockets).
+- Gestión de estados y asignaciones con búsqueda reactiva de usuarios.
+- Descarga segura de archivos adjuntos.
+
+*Nota: Los tests unitarios y el bonus de agentes de IA quedaron pendientes.*
+
+## Variables de entorno
 
 Crea un archivo `.env` en la raíz del repo (puedes copiarlo desde `.env.example`).
 
@@ -32,7 +58,7 @@ Notas:
 
 ---
 
-### Levantar en local con Docker Compose
+## Levantar en local con Docker Compose
 
 1) Levanta los servicios:
 
@@ -58,7 +84,7 @@ Servicios:
 
 ---
 
-### Ejecutar migraciones (Alembic)
+## Ejecutar migraciones (Alembic)
 
 El proyecto utiliza **Alembic configurado de manera asíncrona** para funcionar correctamente con el driver `asyncpg`.
 
@@ -71,7 +97,7 @@ Autogenerar nueva migración (si cambias los modelos):
 docker compose exec app uv run alembic revision --autogenerate -m "descripcion"
 ```
 
-#### ¿Cómo resetear la DB y empezar de cero?
+### ¿Cómo resetear la DB y empezar de cero?
 
 Si necesitas borrar todos los datos y regenerar las migraciones desde cero:
 
@@ -83,17 +109,21 @@ Si necesitas borrar todos los datos y regenerar las migraciones desde cero:
 
 ---
 
-### Probar la app (rápido)
+## Probar la app
 
 Web:
 
 - Abre `http://localhost:8000`
 
+Backend:
+
+- Abre `http://localhost:8000/docs`
+
 ---
 
-### Notas de Desarrollo
+## Notas de Desarrollo
 
-#### Uso de `from __future__ import annotations`
+### Uso de `from __future__ import annotations`
 
 A lo largo del proyecto (especialmente en modelos y schemas) se usa `from __future__ import annotations` para:
 

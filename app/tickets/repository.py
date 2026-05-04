@@ -37,7 +37,13 @@ async def create_ticket(
 
 async def get_ticket_by_id(db: AsyncSession, ticket_id: int) -> Ticket | None:
     res = await db.execute(
-        select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.attachments))
+        select(Ticket)
+        .where(Ticket.id == ticket_id)
+        .options(
+            selectinload(Ticket.attachments),
+            selectinload(Ticket.author),
+            selectinload(Ticket.assigned_to),
+        )
     )
     return res.scalar_one_or_none()
 
@@ -83,7 +89,11 @@ async def get_tickets(
     if status is not None:
         query = query.where(Ticket.status == status)
 
-    query = query.offset(skip).limit(limit).options(selectinload(Ticket.attachments))
+    query = query.offset(skip).limit(limit).options(
+        selectinload(Ticket.attachments),
+        selectinload(Ticket.author),
+        selectinload(Ticket.assigned_to),
+    )
     res = await db.execute(query)
     return res.scalars().all()
 
@@ -124,7 +134,10 @@ async def create_comment(
 
 async def get_comments_by_ticket_id(db: AsyncSession, ticket_id: int) -> Sequence[Comment]:
     res = await db.execute(
-        select(Comment).where(Comment.ticket_id == ticket_id).order_by(Comment.created_at)
+        select(Comment)
+        .where(Comment.ticket_id == ticket_id)
+        .options(selectinload(Comment.author))
+        .order_by(Comment.created_at)
     )
     return res.scalars().all()
 

@@ -1,4 +1,4 @@
-import { createApp, ref, computed, onMounted, onUnmounted } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
 
 const app = createApp({
     setup() {
@@ -9,7 +9,22 @@ const app = createApp({
         const searchQuery = ref('');
         const unreadCount = ref(0);
         const selectedTicket = ref(null);
+        const showCreateModal = ref(false);
+        const showNotifications = ref(false);
+        const notifications = ref([]);
         
+        const sortColumn = ref('updated_at');
+        const sortOrder = ref('desc');
+        
+        const newTicket = ref({
+            title: '',
+            description: '',
+            assigned_to_id: null,
+            priority: 'Media',
+            status: 'Abierto'
+        });
+
+        const priorities = ['Baja', 'Media', 'Alta', 'Urgente'];
         const statuses = ['Abierto', 'En progreso', 'En revisión', 'Cerrado'];
 
         // --- AUTH ---
@@ -19,6 +34,7 @@ const app = createApp({
                 if (res.ok) {
                     user.value = await res.json();
                     await fetchTickets();
+                    await fetchNotifications();
                     initWebSocket();
                 } else {
                     window.location.href = '/auth/login';
@@ -28,9 +44,14 @@ const app = createApp({
                 window.location.href = '/auth/login';
             } finally {
                 loading.value = false;
-                // Initialize Lucide icons after rendering
-                setTimeout(() => lucide.createIcons(), 100);
+                refreshIcons();
             }
+        }
+
+        function refreshIcons() {
+            setTimeout(() => {
+                if (window.lucide) lucide.createIcons();
+            }, 100);
         }
 
         async function logout() {
@@ -47,13 +68,40 @@ const app = createApp({
         }
 
         const filteredTickets = computed(() => {
-            if (!searchQuery.value) return tickets.value;
-            const q = searchQuery.value.toLowerCase();
-            return tickets.value.filter(t => 
-                t.title.toLowerCase().includes(q) || 
-                t.description.toLowerCase().includes(q)
-            );
+            let result = [...tickets.value];
+            if (searchQuery.value) {
+                const q = searchQuery.value.toLowerCase();
+                result = result.filter(t => 
+                    t.title.toLowerCase().includes(q) || 
+                    t.description.toLowerCase().includes(q)
+                );
+            }
+            
+            return result.sort((a, b) => {
+                let valA = a[sortColumn.value];
+                let valB = b[sortColumn.value];
+                
+                // Handle nested objects (author.name, etc)
+                if (sortColumn.value.includes('.')) {
+                    const [obj, key] = sortColumn.value.split('.');
+                    valA = a[obj] ? a[obj][key] : '';
+                    valB = b[obj] ? b[obj][key] : '';
+                }
+
+                if (valA < valB) return sortOrder.value === 'asc' ? -1 : 1;
+                if (valA > valB) return sortOrder.value === 'asc' ? 1 : -1;
+                return 0;
+            });
         });
+
+        function sortBy(column) {
+            if (sortColumn.value === column) {
+                sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn.value = column;
+                sortOrder.value = 'asc';
+            }
+        }
 
         function getTicketsByStatus(status) {
             return filteredTickets.value.filter(t => t.status === status);
@@ -93,12 +141,12 @@ const app = createApp({
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
             
-            ws.onmessage = (event) => {
+            ws.onmessage = async (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'notification') {
                     unreadCount.value++;
-                    // Optionally refresh tickets if current user is involved
-                    fetchTickets();
+                    await fetchNotifications();
+                    await fetchTickets();
                 }
             };
             
@@ -209,13 +257,58 @@ const app = createApp({
             await fetchTickets();
         }
 
-        function toggleNotifications() {
-            unreadCount.value = 0;
-            alert('You have no new notifications');
+        async function fetchNotifications() {
+            const res = await fetch('/api/notifications?unread_only=true');
+            if (res.ok) {
+                notifications.value = await res.json();
+                unreadCount.value = notifications.value.length;
+            }
+        }
+
+        async function toggleNotifications() {
+            showNotifications.value = !showNotifications.value;
+            if (showNotifications.value) {
+                await fetchNotifications();
+                refreshIcons();
+            }
+        }
+
+        async function markAsRead(notificationId) {
+            const res = await fetch(`/api/notifications/${notificationId}/read`, { method: 'PATCH' });
+            if (res.ok) {
+                await fetchNotifications();
+            }
         }
 
         function openCreateModal() {
-            alert('New Ticket functionality: This would open a form to create a new ticket.');
+            showCreateModal.value = true;
+            newTicket.value = {
+                title: '',
+                description: '',
+                assigned_to_id: null,
+                priority: 'Media',
+                status: 'Abierto'
+            };
+            refreshIcons();
+        }
+
+        async function createTicket() {
+            try {
+                const res = await fetch('/api/tickets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newTicket.value)
+                });
+                if (res.ok) {
+                    showCreateModal.value = false;
+                    await fetchTickets();
+                } else {
+                    const data = await res.json();
+                    alert(`Error: ${data.detail || 'Failed to create ticket'}`);
+                }
+            } catch (err) {
+                alert('Connection error');
+            }
         }
 
         onMounted(() => {
@@ -224,11 +317,13 @@ const app = createApp({
 
         return {
             user, tickets, loading, viewMode, searchQuery, unreadCount, selectedTicket,
-            statuses, filteredTickets, getTicketsByStatus,
+            statuses, priorities, filteredTickets, getTicketsByStatus,
             comments, attachments, newComment, userSearchQuery, userResults,
+            showCreateModal, newTicket, showNotifications, notifications,
+            sortColumn, sortOrder, sortBy,
             logout, onDragStart, onDrop, formatDate, selectTicket, closeTicket,
             postComment, searchUsers, reassignTicket, uploadFiles, updateTicketStatus, deleteAttachment,
-            toggleNotifications, openCreateModal
+            toggleNotifications, openCreateModal, createTicket, markAsRead
         };
     }
 });

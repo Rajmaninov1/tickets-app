@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -375,4 +376,27 @@ async def attachments_delete(attachment_id: int, db: AsyncSession = Depends(get_
         "tickets.attachments.delete: done attachment_id=%s ticket_id=%s",
         attachment_id,
         att.ticket_id,
+    )
+
+
+@router.get("/attachments/{attachment_id}/download")
+async def attachments_download(
+    attachment_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: SessionUser = Depends(require_session_user),
+) -> FileResponse:
+    logger.debug("tickets.attachments.download: attachment_id=%s", attachment_id)
+    att = await get_attachment_by_id(db, attachment_id)
+    if not att:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    path = Path(att.storage_path)
+    if not path.exists():
+        logger.error("Attachment file missing on disk: %s", att.storage_path)
+        raise HTTPException(status_code=404, detail="Attachment file missing on disk")
+
+    return FileResponse(
+        path=path,
+        filename=att.filename,
+        media_type=att.content_type or "application/octet-stream",
     )

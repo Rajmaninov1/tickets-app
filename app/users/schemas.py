@@ -6,3 +6,4 @@ class UserRead(BaseModel):
     id: int
     email: EmailStr
     name: str | None
+    avatar_url: str | None

@@ -11,6 +11,7 @@ class UserRef(BaseModel):
     id: int
     email: str
     name: str | None = None
+    avatar_url: str | None = None
 
 
 class TicketCreate(BaseModel):
@@ -42,8 +43,8 @@ class TicketRead(BaseModel):
     id: int
     title: str
     description: str
-    author_id: int
-    assigned_to_id: int
+    author: UserRef
+    assigned_to: UserRef | None
     status: TicketStatus
     priority: TicketPriority
     is_read: bool
@@ -62,6 +63,7 @@ class CommentRead(BaseModel):
     id: int
     ticket_id: int
     author_id: int
+    author: UserRef
     body: str
     is_read: bool
     created_at: datetime
