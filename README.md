@@ -8,13 +8,15 @@ App de tickets para prueba ténica de Orbidi
 - **SSO Google** (`fastapi-sso`) + **sesión en cookie** (`SessionMiddleware`)
 - **PostgreSQL** con **SQLAlchemy async** + Alembic
 - **Tickets / comentarios / adjuntos** (REST API)
-- **Notificaciones** con **RabbitMQ** + **WebSockets**
+- Notificaciones con RabbitMQ + WebSockets: Implementación de un flujo asíncrono para notificaciones, permitiendo un sistema reactivo y desacoplado de la lógica principal del ticket.
 - **Static files** en `static/`
 - **Storage local** en `./data/uploads`
 - Frontend con **Vue**
 - Organización de carpetas según entidades del dominio
 - **docker compose** para levantar los servicios en local
 - **Manejo Desacoplado de Adjuntos**: Separación de la creación de tickets de la subida de archivos para un manejo más limpio de payloads Multipart.
+- Se optó por una arquitectura por dominios priorizando la velocidad de desarrollo, manteniendo una separación clara entre controladores y repositorios, lo que facilitaría una futura transición a Clean Architecture si la aplicación crece en complejidad.
+- El frontend se desarrolló como una Single Page Application (SPA) reactiva con Vue, priorizando la funcionalidad y la integración con la API sobre una arquitectura compleja de componentes, dado que el foco principal de la prueba es el backend. Hecha con "vibe coding", pues no tengo experiencia en frontend.
 
 ## Herramientas de IA usadas
 
@@ -50,6 +52,21 @@ Crea un archivo `.env` en la raíz del repo (puedes copiarlo desde `.env.example
 ```bash
 cp .env.example .env
 ```
+
+### Campos obligatorios
+
+Para que la aplicación funcione correctamente (especialmente el login), **debes configurar las siguientes variables**:
+
+1. **Google OAuth (Obligatorio para el Login):**
+   - `GOOGLE_CLIENT_ID`: ID de cliente obtenido en Google Cloud Console.
+   - `GOOGLE_CLIENT_SECRET`: Secreto de cliente obtenido en Google Cloud Console.
+   - `GOOGLE_REDIRECT_URI`: Debe ser `http://localhost:8000/auth/callback` (o el puerto que uses).
+
+2. **Seguridad:**
+   - `SECRET_KEY`: Una cadena aleatoria para firmar las cookies de sesión.
+
+3. **Base de Datos y Broker:**
+   - Las variables `POSTGRES_*`, `DATABASE_URL` y `RABBITMQ_URL` ya vienen con valores por defecto en el `.env.example` para funcionar con lo configurado en `docker compose`.
 
 Notas:
 
